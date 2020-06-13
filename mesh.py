@@ -10,6 +10,13 @@ import trimesh
 
 
 def decode(imprefix, start, threshold):
+    '''
+
+    :param imprefix: the image prefix of the directory
+    :param start: the index of the start image
+    :param threshold: the threshold to determine the pixel is undecodable or not
+    :return: decode code, mask that implies the pixel is undecodable or not
+    '''
 
     # we will assume a 10 bit code
     nbits = 10
@@ -42,6 +49,11 @@ def decode(imprefix, start, threshold):
 
 
 def background_mask(imprefix, thresh):
+    '''
+    :param imprefix: the image directory to the color image of the background and foreground
+    :param thresh: the threshold to determine the pixel belongs to background or not
+    :return: a binary mask that implies each pixels belongs to foreground or not
+    '''
     back = plt.imread(imprefix + '00.png')
     fore = plt.imread(imprefix + '01.png')
 
@@ -55,7 +67,18 @@ def background_mask(imprefix, thresh):
 
 
 def reconstruct(dir, imprefix_bgL, imprefix_bgR, imprefixL, imprefixR, decode_thresh, camL, camR, bg_thresh=0.05):
-
+    '''
+    :param dir: basic image directory
+    :param imprefix_bgL: prefix of background color image of left camera
+    :param imprefix_bgR: prefix of background color image of right camera
+    :param imprefixL: prefix of decoded image of left camera
+    :param imprefixR: prefix of decoded image of right camera
+    :param decode_thresh: the threshold to determine if the pixel is decodeable or not
+    :param camL: Camera Object of the left camera
+    :param camR:Camera Object of the right camera
+    :param bg_thresh: background threshold
+    :return: pts2L, pts2R, pts3
+    '''
     # Decode the H and V coordinates for the two views
     code_LH, mask_LH = decode(dir+imprefixL, 0, decode_thresh)
     code_LV, mask_LV = decode(dir+imprefixL, 20, decode_thresh)
@@ -93,6 +116,13 @@ def reconstruct(dir, imprefix_bgL, imprefix_bgR, imprefixL, imprefixR, decode_th
 
 
 def box_pruning(boxlimits, pts2L, pts2R, pts3):
+    '''
+    :param boxlimits: The boundary of the box that the object is inside the box
+    :param pts2L: (n, 2) array of left coordinates
+    :param pts2R: (n, 2) array of right coordinates
+    :param pts3: (n, 3) array of the triangulate results coordinates
+    :return: pts2L_prune, pts2R_prune
+    '''
     x, y, z = pts3
     mask_x = (x < boxlimits[0]) & (x > boxlimits[3])
     mask_y = (y < boxlimits[1]) & (y > boxlimits[4])
@@ -106,12 +136,12 @@ def box_pruning(boxlimits, pts2L, pts2R, pts3):
     return pts2L_prune, pts2R_prune
 
 def triangle_pruning(tri, pts3, trithresh=20):
-    # index_map = np.arange(pts3.shape[1])
-    # nodes = []
-    #
-    # for i in range(3):
-    #     nodes.append(pts3[:, tri.T[i]])
-
+    '''
+    :param tri: the triangle mesh in the shape (3, # of triangles)
+    :param pts3: 3D coordinate of object (# of points, 3)
+    :param trithresh: largest length of the triangle edges to keep
+    :return: new tirangle mesh, new pts3, and the index of remaing vertices
+    '''
     tri_new = []
     for (i, j) in [(0, 1), (1, 2), (2, 0)]:
         distance = np.sum((pts3[:,tri[:,i]] - pts3[:,tri[:,j]]) ** 2, 0) ** (1 / 2)
@@ -128,6 +158,12 @@ def triangle_pruning(tri, pts3, trithresh=20):
     return tri_new_get_map, pts3.T[tokeep].T, tokeep
 
 def smooth(pts3, tri, iteration=1):
+    '''
+    :param pts3:
+    :param tri:
+    :param iteration: number of iterations to smooth
+    :return: pts3, new triangle mesh
+    '''
     for i in range(iteration):
         m,n = pts3.shape
         result = np.zeros((m, n))
@@ -140,6 +176,20 @@ def smooth(pts3, tri, iteration=1):
 
 
 def mesh_all(imgdir, thresh, cam):
+    '''
+    :param imgdir: tuple of directory related information
+        (dir, imprefixL, imprefixR, imprefix_bgL, imprefix_bgR )
+
+    :param thresh: tuple of all the threshold values
+        (decode_thresh, bg_thresh, trithresh, boxlimits)
+
+    :param cam: tuple of left and right camera
+        (camL, camR)
+
+    :return: tuple of meshing result after pipeline
+        (pts2L_prune, pts2R_prune, new_pts3, new_tri, colorL, colorR, color)
+
+    '''
     dir, imprefixL, imprefixR, imprefix_bgL, imprefix_bgR = imgdir
     decode_thresh, bg_thresh, trithresh, boxlimits = thresh
     camL, camR = cam
