@@ -107,33 +107,6 @@ def box_pruning(boxlimits, pts2L, pts2R, pts3):
 
 def triangle_pruning(tri, pts3, trithresh=20):
     # index_map = np.arange(pts3.shape[1])
-    nodes = []
-
-    for i in range(3):
-        nodes.append(pts3[:, tri.T[i]])
-
-    tri_new = []
-    masks = []
-    for (i, j) in [(0, 1), (1, 2), (2, 0)]:
-        distance = np.sum((nodes[i] - nodes[j]) ** 2, 0) ** (1 / 2)
-        mask = distance < trithresh
-        masks.append(mask)
-        tri_new.append(tri.T[i][mask])
-
-    tokeep = np.unique(np.concatenate((tri_new[0], tri_new[1], tri_new[2])))
-
-    mask_index = np.zeros(index_map.shape[0], dtype=int)
-    mask_index[tokeep] = 1
-    new_mask_index = np.ma.masked_array(index_map, mask_index, fill_value=-1)
-    new_mask_index[tokeep] = np.arange(tokeep.shape[0])
-
-    mask_new = masks[0] & masks[1] & masks[2]
-    tri_new_get_map = new_mask_index[tri_new[mask_new]]
-
-    return tri_new_get_map, pts3[tokeep]
-
-def triangle_pruning_improved(tri, pts3, trithresh=20):
-    # index_map = np.arange(pts3.shape[1])
     # nodes = []
     #
     # for i in range(3):
@@ -147,14 +120,14 @@ def triangle_pruning_improved(tri, pts3, trithresh=20):
 
     tokeep = np.unique(tri)
 
-    new_mask_index = np.array([-1]*pts3.shape[1])
+    new_mask_index = np.full(pts3.shape[1], -1)
     new_mask_index[tokeep] = np.arange(tokeep.shape[0])
 
     tri_new_get_map = new_mask_index[tri]
 
     return tri_new_get_map, pts3.T[tokeep].T, tokeep
 
-def simple_smooth(pts3, tri, iteration=1):
+def smooth(pts3, tri, iteration=1):
     for i in range(iteration):
         m,n = pts3.shape
         result = np.zeros((m, n))
@@ -174,11 +147,6 @@ def mesh_all(imgdir, thresh, cam):
     pts2L, pts2R, pts3 = reconstruct(dir, imprefix_bgL, imprefix_bgR, imprefixL, imprefixR, decode_thresh, camL, camR, bg_thresh)
 
 
-    colorimg_L = plt.imread(dir + imprefix_bgL + '01.png')
-    colorimg_R = plt.imread(dir + imprefix_bgR + '01.png')
-    colorL = colorimg_L[pts2L[1, :], pts2L[0, :]]
-    colorR = colorimg_R[pts2R[1, :], pts2R[0, :]]
-
         # fid = open('data/render/color.pickle', 'wb')
         # pickle.dump((colorL, colorR), fid)
         # fid.close()
@@ -188,8 +156,17 @@ def mesh_all(imgdir, thresh, cam):
     pts2L_prune, pts2R_prune = box_pruning(boxlimits, pts2L, pts2R, pts3)
     pts3_prune_tri = triangulate(pts2L_prune, camL, pts2R_prune, camR)
     tri = Delaunay(pts2L_prune.T).simplices
-    new_tri, new_pts3, tokeep = triangle_pruning_improved(tri, pts3_prune_tri, trithresh)
-    color = np.average((colorL[tokeep], colorR[tokeep]), axis=0)
+    new_tri, new_pts3, tokeep = triangle_pruning(tri, pts3_prune_tri, trithresh)
 
-    return new_pts3, new_tri, colorL[tokeep], colorR[tokeep], color
+    colorimg_L = plt.imread(dir + imprefix_bgL + '01.png')
+    colorimg_R = plt.imread(dir + imprefix_bgR + '01.png')
+
+    pts2L_prune = pts2L_prune.T[tokeep].T
+    pts2R_prune = pts2R_prune.T[tokeep].T
+    colorL = colorimg_L[pts2L_prune[1, :], pts2L_prune[0, :]]
+    colorR = colorimg_R[pts2R_prune[1, :], pts2R_prune[0, :]]
+
+    color = np.average((colorL, colorR), axis=0)
+
+    return pts2L_prune, pts2R_prune, new_pts3, new_tri, colorL, colorR, color
 
